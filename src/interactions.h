@@ -8,11 +8,13 @@
  * Used for diffuse lighting.
  */
 __host__ __device__
-glm::vec3 calculateRandomDirectionInHemisphere(
-        glm::vec3 normal, thrust::default_random_engine &rng) {
+    glm::vec3
+    calculateRandomDirectionInHemisphere(
+        glm::vec3 normal, thrust::default_random_engine &rng)
+{
     thrust::uniform_real_distribution<float> u01(0, 1);
 
-    float up = sqrt(u01(rng)); // cos(theta)
+    float up = sqrt(u01(rng));      // cos(theta)
     float over = sqrt(1 - up * up); // sin(theta)
     float around = u01(rng) * TWO_PI;
 
@@ -22,11 +24,16 @@ glm::vec3 calculateRandomDirectionInHemisphere(
     // Peter Kutz.
 
     glm::vec3 directionNotNormal;
-    if (abs(normal.x) < SQRT_OF_ONE_THIRD) {
+    if (abs(normal.x) < SQRT_OF_ONE_THIRD)
+    {
         directionNotNormal = glm::vec3(1, 0, 0);
-    } else if (abs(normal.y) < SQRT_OF_ONE_THIRD) {
+    }
+    else if (abs(normal.y) < SQRT_OF_ONE_THIRD)
+    {
         directionNotNormal = glm::vec3(0, 1, 0);
-    } else {
+    }
+    else
+    {
         directionNotNormal = glm::vec3(0, 0, 1);
     }
 
@@ -36,9 +43,7 @@ glm::vec3 calculateRandomDirectionInHemisphere(
     glm::vec3 perpendicularDirection2 =
         glm::normalize(glm::cross(normal, perpendicularDirection1));
 
-    return up * normal
-        + cos(around) * over * perpendicularDirection1
-        + sin(around) * over * perpendicularDirection2;
+    return up * normal + cos(around) * over * perpendicularDirection1 + sin(around) * over * perpendicularDirection2;
 }
 
 /**
@@ -66,14 +71,38 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
-__host__ __device__
-void scatterRay(
-        PathSegment & pathSegment,
-        glm::vec3 intersect,
-        glm::vec3 normal,
-        const Material &m,
-        thrust::default_random_engine &rng) {
+__host__ __device__ void scatterRay(
+    PathSegment &pathSegment,
+    glm::vec3 intersect,
+    glm::vec3 normal,
+    const Material &m,
+    thrust::default_random_engine &rng)
+{
     // TODO: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+
+    // pure diffuse
+    float cosTheta = glm::dot(normal, -pathSegment.ray.direction);
+    pathSegment.color *= (m.color / PI * cosTheta);
+    // pathSegment.color *= light;
+
+    pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+    pathSegment.ray.origin = intersect + 0.001f * pathSegment.ray.direction;
+
+    // pure diffuse color
+    // float cosTheta = glm::dot(normal, pathSegment.ray.direction);
+    // glm::vec3 new_color = m.color / PI * cosTheta;
+
+    // pure specular
+    // direction = glm::reflect(pathSegment.ray.direction, normal);
+
+    // pure refractive
+    // direction = glm::refract(pathSegment.ray.direction, normal, 1.0f / m.indexOfRefraction);
+
+    // pure specular color
+    // pathSegment.color *= m.specular.color;
+
+    // pure refractive color
+    // pathSegment.color *= m.specular.color;
 }

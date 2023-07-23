@@ -13,6 +13,7 @@
 #include "pathtrace.h"
 #include "intersections.h"
 #include "interactions.h"
+#include <iostream>
 
 #define ERRORCHECK 1
 
@@ -236,11 +237,20 @@ __global__ void shadeFakeMaterial(
 	if (idx < num_paths)
 	{
 		ShadeableIntersection intersection = shadeableIntersections[idx];
+		if (pathSegments[idx].remainingBounces <= 0)
+		{
+			return;
+		}
+
 		if (intersection.t > 0.0f)
-		{	// if the intersection exists...
+		{ // if the intersection exists...
 			// Set up the RNG
 			// LOOK: this is how you use thrust's RNG! Please look at
 			// makeSeededRandomEngine as well.
+			if (pathSegments[idx].remainingBounces < 8)
+			{
+				int debug = pathSegments[idx].remainingBounces + 10;
+			}
 			thrust::default_random_engine rng = makeSeededRandomEngine(iter, idx, 0);
 			thrust::uniform_real_distribution<float> u01(0, 1);
 
@@ -251,15 +261,26 @@ __global__ void shadeFakeMaterial(
 			if (material.emittance > 0.0f)
 			{
 				pathSegments[idx].color *= (materialColor * material.emittance);
+				pathSegments[idx].remainingBounces = 0;
+				// depth set to zero, terminate path
+				return;
 			}
 			// Otherwise, do some pseudo-lighting computation. This is actually more
 			// like what you would expect from shading in a rasterizer like OpenGL.
 			// TODO: replace this! you should be able to start with basically a one-liner
 			else
 			{
-				float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
-				pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-				pathSegments[idx].color *= u01(rng); // apply some noise because why not
+				// float lightTerm = glm::dot(intersection.surfaceNormal, glm::vec3(0.0f, 1.0f, 0.0f));
+				// pathSegments[idx].color *= (materialColor * lightTerm) * 0.3f + ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
+				// pathSegments[idx].color *= u01(rng); // apply some noise because why not
+
+				// Scatter ray
+				// pathSegments[idx].ray.direction = glm::normalize(calculateRandomDirectionInHemisphere(intersection.surfaceNormal, rng));
+				// pathSegments[idx].ray.origin = getPointOnRay(pathSegments[idx].ray, intersection.t);
+
+				// Update Ray
+				scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t), intersection.surfaceNormal, material, rng);
+				pathSegments[idx].remainingBounces--;
 			}
 			// If there was no intersection, color the ray black.
 			// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
@@ -269,6 +290,7 @@ __global__ void shadeFakeMaterial(
 		else
 		{
 			pathSegments[idx].color = glm::vec3(0.0f);
+			pathSegments[idx].remainingBounces = 0;
 		}
 	}
 }
@@ -291,7 +313,8 @@ __global__ void finalGather(int nPaths, glm::vec3 *image, PathSegment *iteration
  */
 void pathtrace(uchar4 *pbo, int frame, int iter)
 {
-	const int traceDepth = hst_scene->state.traceDepth;
+	// const int traceDepth = hst_scene->state.traceDepth;
+	const int traceDepth = 8;
 	const Camera &cam = hst_scene->state.camera;
 	const int pixelcount = cam.resolution.x * cam.resolution.y;
 
@@ -375,11 +398,16 @@ void pathtrace(uchar4 *pbo, int frame, int iter)
 			dev_intersections,
 			dev_paths,
 			dev_materials);
-		iterationComplete = true; // TODO: should be based off stream compaction results.
+
+		if (depth == traceDepth)
+		{
+			iterationComplete = true; // TODO: should be based off stream compaction results.
+		}
 
 		if (guiData != NULL)
 		{
 			guiData->TracedDepth = depth;
+			// std::cout << "Traced Depth: " << depth << std::endl;
 		}
 	}
 
