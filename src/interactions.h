@@ -75,18 +75,18 @@ __host__ __device__ void scatterRay(PathSegment &pathSegment,
     thrust::uniform_real_distribution<float> u01(0, 1);
     float reflectProb = u01(rng);
 
-    if (reflectProb > m.hasReflective) {
-        // pure diffuse
-        pathSegment.color *= m.color;
-        pathSegment.ray.direction =
-            calculateRandomDirectionInHemisphere(normal, rng);
-    } else {
+    if (m.hasReflective == 1) {
         // pure specular
         pathSegment.color *= m.specular.color;
         pathSegment.ray.direction =
             glm::reflect(pathSegment.ray.direction, normal);
+    } else {
+        // pure diffuse
+        pathSegment.color *= m.color;
+        pathSegment.ray.direction =
+            calculateRandomDirectionInHemisphere(normal, rng);
     }
-    pathSegment.ray.origin = intersect;
+    pathSegment.ray.origin = intersect + 0.002f * pathSegment.ray.direction;
 
     // pure refractive
     // direction = glm::refract(pathSegment.ray.direction, normal, 1.0f /
