@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cuda.h>
+#include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
@@ -16,6 +17,8 @@
 #include <iostream>
 
 #define ERRORCHECK 1
+#define CACHE_FIRST_BOUNCE 0
+#define SORT_BY_MATERIAL 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -190,6 +193,7 @@ __global__ void computeIntersections(int depth, int num_paths, PathSegment *path
         }
 
         if (hit_geom_index == -1) {
+            // The ray missed all scene geometry objects.
             intersections[path_index].t = -1.0f;
         } else {
             // The ray hits something
@@ -235,27 +239,7 @@ __global__ void shadeMaterial(int iter, int num_paths, ShadeableIntersection *sh
                 pathSegments[idx].color *= (materialColor * material.emittance);
                 pathSegments[idx].remainingBounces = 0;
                 // depth set to zero, terminate path
-            }
-            // Otherwise, do some pseudo-lighting computation. This is actually
-            // more like what you would expect from shading in a rasterizer like
-            // OpenGL.
-            // TODO: replace this! you should be able to start with basically a
-            // one-liner
-            else {
-                // float lightTerm = glm::dot(intersection.surfaceNormal,
-                //                            glm::vec3(0.0f, 1.0f, 0.0f));
-                // pathSegments[idx].color *=
-                //     (materialColor * lightTerm) * 0.3f +
-                //     ((1.0f - intersection.t * 0.02f) * materialColor) * 0.7f;
-                // pathSegments[idx].color *= materialColor;
-
-                // Scatter ray
-                // pathSegments[idx].ray.origin =
-                //     getPointOnRay(pathSegments[idx].ray, intersection.t);
-                // pathSegments[idx].ray.direction =
-                //     calculateRandomDirectionInHemisphere(
-                //         intersection.surfaceNormal, rng);
-
+            } else {
                 // Update Ray
                 scatterRay(pathSegments[idx], getPointOnRay(pathSegments[idx].ray, intersection.t),
                            intersection.surfaceNormal, material, rng);
@@ -348,8 +332,6 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
     // * Finally, add this iteration's results to the image. This has been done
     //   for you.
 
-    // TODO: perform one iteration of path tracing
-
     generateRayFromCamera<<<blocksPerGrid2d, blockSize2d>>>(cam, iter, traceDepth, dev_paths);
     checkCUDAError("generate camera ray");
 
@@ -373,7 +355,6 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
         cudaDeviceSynchronize();
         depth++;
 
-        // TODO:
         // --- Shading Stage ---
         // Shade path segments based on intersections and generate new rays by
         // evaluating the BSDF.
@@ -382,34 +363,23 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
         // TODO: compare between directly shading the path segments and shading
         // path segments that have been reshuffled to be contiguous in memory.
 
+#if SORT_BY_MATERIAL
+#endif
+
         shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(iter, num_paths, dev_intersections, dev_paths,
                                                                     dev_materials);
-
         // Stream Compaction
         dev_path_end = thrust::stable_partition(thrust::device, dev_paths, dev_paths + num_paths, isPathTerminate());
         num_paths = dev_path_end - dev_paths;
 
         if (num_paths == 0 || depth > traceDepth) {
             iterationComplete = true;
-            // TODO: should be based off stream compaction results.
         }
 
         if (guiData != NULL) {
             guiData->TracedDepth = depth;
         }
-        // std::cout << "Traced Depth: " << depth << " , num paths:" << num_paths << std::endl;
     }
-
-    // int *dev_numOfActivePathSegments = NULL;
-    // cudaMalloc(&dev_numOfActivePathSegments, sizeof(int));
-    // cudaMemset(dev_numOfActivePathSegments, 0, sizeof(int));
-    // dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-    // countActivePathsegments<<<numblocksPathSegmentTracing, blockSize1d>>>(num_paths, dev_paths,
-    //                                                                       dev_numOfActivePathSegments);
-    // int numOfActivePathSegments;
-    // cudaMemcpy(&numOfActivePathSegments, dev_numOfActivePathSegments, sizeof(int), cudaMemcpyDeviceToHost);
-    // std::cout << "numOfActivePathSegments: " << numOfActivePathSegments << std::endl;
-
     // Assemble this iteration and apply it to the image
     dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
     finalGather<<<numBlocksPixels, blockSize1d>>>(pixelcount, dev_image, dev_paths);

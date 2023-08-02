@@ -1,8 +1,12 @@
 #include "main.h"
 #include "preview.h"
+#include <chrono>
 #include <cstring>
 
+static int ITERATION_TARGET = 32;
+
 static std::string startTimeString;
+std::chrono::time_point<std::chrono::high_resolution_clock> chronoStartTime;
 
 // For camera controls
 static bool leftMousePressed = false;
@@ -98,8 +102,7 @@ void saveImage() {
 
     std::string filename = renderState->imageName;
     std::ostringstream ss;
-    ss << "renders/" << filename << "." << startTimeString << "." << samples
-       << "samp";
+    ss << "renders/" << filename << "." << startTimeString << "." << samples << "samp";
     filename = ss.str();
 
     // CHECKITOUT
@@ -108,6 +111,13 @@ void saveImage() {
 }
 
 void runCuda() {
+    if (iteration == ITERATION_TARGET) {
+        auto chronoEndTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(chronoEndTime - chronoStartTime).count();
+        std::cout << "Rendered " << iteration << " iterations in " << duration << " milliseconds." << std::endl;
+
+        system("pause"); // stop Win32 console from closing on exit
+    }
     if (camchanged) {
         iteration = 0;
         Camera &cam = renderState->camera;
@@ -135,6 +145,7 @@ void runCuda() {
     if (iteration == 0) {
         pathtraceFree();
         pathtraceInit(scene);
+        chronoStartTime = std::chrono::high_resolution_clock::now();
     }
 
     if (iteration < renderState->iterations) {
@@ -156,8 +167,7 @@ void runCuda() {
     }
 }
 
-void keyCallback(GLFWwindow *window, int key, int scancode, int action,
-                 int mods) {
+void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
     if (action == GLFW_PRESS) {
         switch (key) {
         case GLFW_KEY_ESCAPE:
@@ -181,12 +191,9 @@ void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods) {
     if (MouseOverImGuiWindow()) {
         return;
     }
-    leftMousePressed =
-        (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
-    rightMousePressed =
-        (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
-    middleMousePressed =
-        (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
+    leftMousePressed = (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS);
+    rightMousePressed = (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS);
+    middleMousePressed = (button == GLFW_MOUSE_BUTTON_MIDDLE && action == GLFW_PRESS);
 }
 
 void mousePositionCallback(GLFWwindow *window, double xpos, double ypos) {
