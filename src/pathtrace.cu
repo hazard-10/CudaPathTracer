@@ -17,7 +17,7 @@
 #include <iostream>
 
 #define ERRORCHECK 1
-#define CACHE_FIRST_BOUNCE 0
+#define CACHE_FIRST_BOUNCE 1
 #define SORT_BY_MATERIAL 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -77,6 +77,7 @@ static Material *dev_materials = NULL;
 static PathSegment *dev_paths = NULL;
 static ShadeableIntersection *dev_intersections = NULL;
 // TODO: static variables for device memory, any extra info you need, etc
+static ShadeableIntersection *dev_intersections_cache = NULL;
 
 // ...
 
@@ -350,15 +351,34 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 
     bool iterationComplete = false;
     while (!iterationComplete) {
-        // clean shading chunks
-        cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
-
-        // tracing
         dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+
+#if CACHE_FIRST_BOUNCE
+        if (depth == 0) {
+            if (iter == 1) {
+                cudaMalloc(&dev_intersections_cache, pixelcount * sizeof(ShadeableIntersection));
+                cudaMemset(dev_intersections_cache, 0, pixelcount * sizeof(ShadeableIntersection));
+                computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(
+                    depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections_cache);
+                checkCUDAError("trace first cached intersection");
+            } else {
+                cudaMemcpy(dev_intersections, dev_intersections_cache, pixelcount * sizeof(ShadeableIntersection),
+                           cudaMemcpyDeviceToDevice);
+                cudaDeviceSynchronize();
+            }
+        } else {
+            cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection)); // clean shading chunks
+            computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(
+                depth, num_paths, dev_paths, dev_geoms, hst_scene->geoms.size(), dev_intersections);
+            checkCUDAError("trace one intersection");
+        }
+#else
+        cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection)); // clean shading chunks
         computeIntersections<<<numblocksPathSegmentTracing, blockSize1d>>>(depth, num_paths, dev_paths, dev_geoms,
                                                                            hst_scene->geoms.size(), dev_intersections);
-        checkCUDAError("trace one intersection");
         cudaDeviceSynchronize();
+        checkCUDAError("trace one intersection");
+#endif
         depth++;
 
         // --- Shading Stage ---
