@@ -3,7 +3,7 @@
 #include <chrono>
 #include <cstring>
 
-static int ITERATION_TARGET = 32;
+static int ITERATION_TARGET = 256;
 
 static std::string startTimeString;
 std::chrono::time_point<std::chrono::high_resolution_clock> chronoStartTime;

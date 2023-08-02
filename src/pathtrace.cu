@@ -18,7 +18,7 @@
 
 #define ERRORCHECK 1
 #define CACHE_FIRST_BOUNCE 0
-#define SORT_BY_MATERIAL 1
+#define SORT_BY_MATERIAL 0
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -284,6 +284,12 @@ struct isPathTerminate {
     __host__ __device__ bool operator()(const PathSegment &p) { return p.remainingBounces != 0; }
 };
 
+struct sortPathByMaterial {
+    __host__ __device__ bool operator()(const ShadeableIntersection &s1, const ShadeableIntersection &s2) {
+        return s1.materialId < s2.materialId;
+    }
+};
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -364,6 +370,8 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
         // path segments that have been reshuffled to be contiguous in memory.
 
 #if SORT_BY_MATERIAL
+        thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths, dev_paths,
+                            sortPathByMaterial());
 #endif
 
         shadeMaterial<<<numblocksPathSegmentTracing, blockSize1d>>>(iter, num_paths, dev_intersections, dev_paths,
