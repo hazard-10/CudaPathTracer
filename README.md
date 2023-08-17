@@ -1,13 +1,28 @@
-CUDA Path Tracer
-================
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 3**
+![header](readme/cornell_sample.png)
 
-* (TODO) YOUR NAME HERE
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+# Cuda Path Tracer
 
-### (TODO: Your README)
+A hardware-accelerated Monte Carlo path tracer designed for performance and efficiency global illuminated-rendering.
 
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
+## Key Performance Features:
+- Parallel ray-material shading on GPU.
+- Ray path termination with Stream Compaction.
+- First Ray intersection cache.
+- Ray sort by material in memory.
 
+## Performance Improvement Measures:
+*Configurations for Testing*:
+- Scene: Cornell box
+- Camera Resolution: 800x800 pixels
+- Samples rate: 64 samples per camera pixel
+- Tested Environment: Windows 11, RTX 4090, Intel i5-13600kf @5GHz
+
+Render time is measured in milliseconds.
+
+![measure1](readme/chart1.png)
+
+## Ongoing Features:
+- [x]  First Ray intersection cache.
+- [ ] Import custom models with glTF format
+- [ ] Anti-aliasing
